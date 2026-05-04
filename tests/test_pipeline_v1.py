@@ -33,7 +33,7 @@ def _make_business_result(business_id="biz_a"):
         name="Bayou Jazz",
         stars=4.5,
         price_range=2,
-        evidence="Great spot.",
+        evidence=["Great spot."],
     )
 
 
