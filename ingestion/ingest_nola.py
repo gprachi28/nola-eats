@@ -74,7 +74,9 @@ def _parse_str(val: str | None) -> str | None:
 
 
 def _parse_dict(val: str | None) -> str | None:
-    """Python-repr dict string → JSON string, or None on failure."""
+    """Python-repr dict string → JSON string, or None on failure.
+    "{'live': True, ...}" becomes the JSON string {"live": true, ...}"""
+
     if val is None:
         return None
     try:
