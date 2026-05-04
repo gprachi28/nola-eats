@@ -8,6 +8,22 @@ A conversational restaurant assistant for New Orleans. Ask natural language ques
 
 ---
 
+## Contents
+
+- [Demo](#demo-ui-designed-with-claude)
+- [How It Works](#️-how-it-works)
+- [Dataset](#-dataset)
+- [Performance](#-performance)
+- [SQL Filter Fields](#️-sql-filter-fields)
+- [Security](#️-security)
+- [Output Guardrails](#-output-guardrails)
+- [Stack](#-stack)
+- [Setup](#-setup)
+- [Running](#️-running)
+- [What's Next](#️-whats-next)
+
+---
+
 ## Demo [UI designed with Claude]
 
 https://github.com/user-attachments/assets/1adddbe5-e89d-4fac-9d1d-1296b5124cd1
