@@ -77,6 +77,8 @@ User question
 
 **Why New Orleans?** Its semantically rich review vocabulary — Creole, Cajun, po'boys, beignets, jazz brunch, second lines, Frenchmen Street — gives semantic retrieval real signal to work with. A query like *"late-night Cajun spot after a jazz show"* surfaces meaningfully different results than *"casual dinner."* City was selected after inspecting the actual dataset: Las Vegas is absent from this Yelp release.
 
+See [docs/yelp_example.md](docs/yelp_example.md) for an annotated example of the raw `business.json` and `review.json` record formats, including the attribute encoding quirks the ingest pipeline handles.
+
 ---
 
 ## ⚡ Performance
