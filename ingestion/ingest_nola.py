@@ -13,7 +13,6 @@ Usage:
 import argparse
 import ast
 import json
-import pickle
 import re
 import sqlite3
 from pathlib import Path
@@ -286,12 +285,12 @@ def _flush_batch(batch: dict, collection, model: EmbeddingModel) -> None:
 
 def load_checkpoint() -> int:
     if CHECKPOINT_FILE.exists():
-        return pickle.loads(CHECKPOINT_FILE.read_bytes())
+        return json.loads(CHECKPOINT_FILE.read_text())
     return 0
 
 
 def save_checkpoint(idx: int) -> None:
-    CHECKPOINT_FILE.write_bytes(pickle.dumps(idx))
+    CHECKPOINT_FILE.write_text(json.dumps(idx))
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
