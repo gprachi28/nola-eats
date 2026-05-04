@@ -190,8 +190,8 @@ cp .env.example .env          # override LLM_BASE_URL if using a non-default por
 **1. Ingest** (one-time, ~30–45 min on M4 Pro):
 ```bash
 python -m ingestion.ingest_nola \
-  --business-file /path/to/yelp_academic_dataset_business.json \
-  --review-file /path/to/yelp_academic_dataset_review.json
+  --business /path/to/yelp_academic_dataset_business.json \
+  --review /path/to/yelp_academic_dataset_review.json
 ```
 
 **2. Start LLM server (mlx_lm, Apple Silicon):**
