@@ -8,7 +8,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.pipeline_v1 import run, _fetch_business_meta
+import json
+
+from api.pipeline_v1 import run, stream, _fetch_business_meta
 from api.schemas import BusinessResult, QueryPlan, QueryResponse
 
 
@@ -170,3 +172,86 @@ def test_fetch_business_meta_queries_sqlite(tmp_path):
         result = _fetch_business_meta(["biz_a"])
 
     assert result == {"biz_a": {"name": "Bayou Jazz", "stars": 4.5, "price_range": 2}}
+
+
+# ── stream() ───────────────────────────────────────────────────────────────────
+
+
+def _parse_sse_events(events: list[str]) -> list[tuple[str, dict]]:
+    """Parse raw SSE strings into (event_name, data) pairs."""
+    parsed = []
+    for e in events:
+        lines = e.strip().split("\n")
+        name = lines[0].split(": ", 1)[1]
+        data = json.loads(lines[1].split(": ", 1)[1])
+        parsed.append((name, data))
+    return parsed
+
+
+def test_stream_emits_correct_event_sequence():
+    plan = _make_plan()
+    snippet = _make_snippet()
+    biz_result = _make_business_result()
+    meta = {"biz_a": {"name": "Bayou Jazz", "stars": 4.5, "price_range": 2}}
+
+    with (
+        patch("api.pipeline_v1.plan_query", return_value=plan),
+        patch("api.pipeline_v1.filter_businesses", return_value=["biz_a"]),
+        patch("api.pipeline_v1.retrieve", return_value=[snippet]),
+        patch("api.pipeline_v1._fetch_business_meta", return_value=meta),
+        patch("api.pipeline_v1.synthesize_stream", return_value=(iter(["Hello", " world"]), [biz_result])),
+    ):
+        events = _parse_sse_events(list(stream("bachelor party spot")))
+
+    names = [e[0] for e in events]
+    assert names == ["planning", "candidates", "token", "token", "done"]
+
+
+def test_stream_planning_event_carries_query_plan():
+    plan = _make_plan(intent="find_businesses", sql_filters={"noise_level": "loud"}, semantic_query="lively")
+    meta = {"biz_a": {"name": "Bayou Jazz", "stars": 4.5, "price_range": 2}}
+
+    with (
+        patch("api.pipeline_v1.plan_query", return_value=plan),
+        patch("api.pipeline_v1.filter_businesses", return_value=["biz_a"]),
+        patch("api.pipeline_v1.retrieve", return_value=[_make_snippet()]),
+        patch("api.pipeline_v1._fetch_business_meta", return_value=meta),
+        patch("api.pipeline_v1.synthesize_stream", return_value=(iter([]), [_make_business_result()])),
+    ):
+        events = _parse_sse_events(list(stream("test")))
+
+    planning_data = events[0][1]
+    assert planning_data["intent"] == "find_businesses"
+    assert planning_data["sql_filters"] == {"noise_level": "loud"}
+
+
+def test_stream_candidates_event_carries_business_names():
+    meta = {
+        "biz_a": {"name": "Bayou Jazz", "stars": 4.5, "price_range": 2},
+        "biz_b": {"name": "Café Du Monde", "stars": 4.2, "price_range": 1},
+    }
+    snippets = [_make_snippet("biz_a"), _make_snippet("biz_b")]
+
+    with (
+        patch("api.pipeline_v1.plan_query", return_value=_make_plan()),
+        patch("api.pipeline_v1.filter_businesses", return_value=["biz_a", "biz_b"]),
+        patch("api.pipeline_v1.retrieve", return_value=snippets),
+        patch("api.pipeline_v1._fetch_business_meta", return_value=meta),
+        patch("api.pipeline_v1.synthesize_stream", return_value=(iter([]), [])),
+    ):
+        events = _parse_sse_events(list(stream("test")))
+
+    candidates_data = events[1][1]
+    assert candidates_data["count"] == 2
+    assert set(candidates_data["businesses"]) == {"Bayou Jazz", "Café Du Monde"}
+
+
+def test_stream_yields_generic_error_event_on_exception():
+    with patch("api.pipeline_v1.plan_query", side_effect=ValueError("internal details here")):
+        events = _parse_sse_events(list(stream("test question")))
+
+    assert len(events) == 1
+    assert events[0][0] == "error"
+    assert events[0][1]["message"] == "An error occurred. Please try again."
+    # Internal details must not leak to the client
+    assert "internal details here" not in events[0][1]["message"]
