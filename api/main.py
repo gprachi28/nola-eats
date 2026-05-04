@@ -15,6 +15,8 @@ from api.schemas import QueryRequest, QueryResponse
 
 app = FastAPI(title="Yelp NOLA Conversational Assistant")
 
+_index_html: str = ""
+
 
 @app.on_event("startup")
 def warmup() -> None:
@@ -24,6 +26,8 @@ def warmup() -> None:
     embedding model initialisation + HNSW index loading from disk. After warmup,
     every query hits warm state.
     """
+    global _index_html
+    _index_html = (Path(__file__).parent.parent / "static" / "index.html").read_text()
     _get_model()
     _get_collection()
     retrieve("warmup")  # forces HNSW index into memory
@@ -31,8 +35,7 @@ def warmup() -> None:
 
 @app.get("/")
 def index() -> HTMLResponse:
-    html_path = Path(__file__).parent.parent / "static" / "index.html"
-    return HTMLResponse(html_path.read_text())
+    return HTMLResponse(_index_html)
 
 
 @app.post("/api/v1/query", response_model=QueryResponse)
