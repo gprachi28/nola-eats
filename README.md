@@ -95,7 +95,7 @@ All results on Apple M4 Pro, `mlx-community/Qwen2.5-7B-Instruct-4bit` via `mlx_l
 | Synthesizer | ~2,200 ms |
 | **End-to-end** | **~4,100 ms** |
 
-**Warm p50: ~4.1s** — 3.6× under the <15s target. Achieved across 20 experiments: key wins were switching to a 4-bit quantized model (2.6× speedup), eliminating a redundant per-request ChromaDB scan, and a dummy-query warmup at startup to pre-load the HNSW index into RAM. Full experiment log: [experiments.md](experiments.md).
+**Warm p50: ~4.1s** — 3.6× under the <15s target. Achieved across 20 experiments: key wins were switching to a 4-bit quantized model (2.6× speedup), eliminating a redundant per-request ChromaDB scan, and a dummy-query warmup at startup to pre-load the HNSW index into RAM. Full experiment log: [experiments.md](docs/experiments.md).
 
 ![Latency optimisation across 15 experiments](benchmarks/latency_benchmarks.png)
 
