@@ -7,6 +7,8 @@ within a candidate pool of businesses.
 Public API:
     retrieve(semantic_query, business_ids=None, top_k=20) -> list[dict]
 """
+import threading
+
 import chromadb
 from mlx_embedding_models.embedding import EmbeddingModel
 
@@ -19,21 +21,27 @@ QUERY_PREFIX = "search_query: "
 _model: EmbeddingModel | None = None
 _collection = None
 _collection_size: int | None = None
+_model_lock = threading.Lock()
+_collection_lock = threading.Lock()
 
 
 def _get_model() -> EmbeddingModel:
     global _model
     if _model is None:
-        _model = EmbeddingModel.from_registry(settings.embed_model)
+        with _model_lock:
+            if _model is None:
+                _model = EmbeddingModel.from_registry(settings.embed_model)
     return _model
 
 
 def _get_collection():
     global _collection, _collection_size
     if _collection is None:
-        client = chromadb.PersistentClient(path=settings.chroma_path)
-        _collection = client.get_collection(settings.chroma_collection)
-        _collection_size = _collection.count()
+        with _collection_lock:
+            if _collection is None:
+                client = chromadb.PersistentClient(path=settings.chroma_path)
+                _collection = client.get_collection(settings.chroma_collection)
+                _collection_size = _collection.count()
     return _collection
 
 

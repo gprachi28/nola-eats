@@ -112,7 +112,9 @@ def test_retrieve_caps_n_results_to_collection_size():
     col = _mock_collection(["r1"], [{"business_id": "a", "stars": 4.0, "date": "2023-01-01"}], [0.1])
     col.count.return_value = 3  # collection smaller than top_k
 
-    with _mock_model(), _mock_coll(col), _mock_embed():
+    # _collection_size is a module-level cache set only by the real _get_collection();
+    # patch it directly so the cap logic sees the small collection size.
+    with _mock_model(), _mock_coll(col), _mock_embed(), patch("api.retriever._collection_size", 3):
         retrieve("query", top_k=20)
 
     call_kwargs = col.query.call_args[1]
