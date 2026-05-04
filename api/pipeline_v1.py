@@ -89,7 +89,8 @@ def stream(question: str) -> Iterator[str]:
         yield sse("done", {"businesses": [b.model_dump() for b in businesses]})
 
     except Exception as exc:
-        yield sse("error", {"message": str(exc)})
+        print(f"stream pipeline error: {exc}")
+        yield sse("error", {"message": "An error occurred. Please try again."})
 
 
 def _fetch_business_meta(business_ids: list[str]) -> dict[str, dict]:
