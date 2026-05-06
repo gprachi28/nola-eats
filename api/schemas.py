@@ -43,7 +43,7 @@ class QueryResponse(BaseModel):
 
 
 class SessionQueryRequest(BaseModel):
-    question: str
+    question: str = Field(..., max_length=2000)
     session_id: Optional[str] = None
 
 

@@ -89,7 +89,8 @@ def stream(question: str) -> Iterator[str]:
         yield sse("done", {"businesses": [b.model_dump() for b in businesses]})
 
     except Exception as exc:
-        yield sse("error", {"message": str(exc)})
+        print(f"stream pipeline error: {exc}")
+        yield sse("error", {"message": "An error occurred. Please try again."})
 
 
 def _fetch_business_meta(business_ids: list[str]) -> dict[str, dict]:
@@ -97,11 +98,10 @@ def _fetch_business_meta(business_ids: list[str]) -> dict[str, dict]:
     if not business_ids:
         return {}
     placeholders = ",".join("?" * len(business_ids))
-    conn = sqlite3.connect(settings.sqlite_path)
-    rows = conn.execute(
-        f"SELECT business_id, name, stars, price_range FROM businesses"
-        f" WHERE business_id IN ({placeholders})",
-        business_ids,
-    ).fetchall()
-    conn.close()
+    with sqlite3.connect(settings.sqlite_path) as conn:
+        rows = conn.execute(
+            f"SELECT business_id, name, stars, price_range FROM businesses"
+            f" WHERE business_id IN ({placeholders})",
+            business_ids,
+        ).fetchall()
     return {row[0]: {"name": row[1], "stars": row[2], "price_range": row[3]} for row in rows}

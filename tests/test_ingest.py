@@ -5,7 +5,6 @@ Covers: checkpoint round-trip, stream_reviews line parsing, embed truncation + r
 Does NOT test ingest() end-to-end — that requires a live ChromaDB + model (integration concern).
 """
 import json
-import pickle
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -33,7 +32,7 @@ def test_save_checkpoint_writes_to_disk(tmp_path, monkeypatch):
     cp = tmp_path / "checkpoint.pkl"
     monkeypatch.setattr("ingestion.ingest_nola.CHECKPOINT_FILE", cp)
     save_checkpoint(99)
-    assert pickle.loads(cp.read_bytes()) == 99
+    assert json.loads(cp.read_text()) == 99
 
 
 # ── stream_reviews ─────────────────────────────────────────────────────────────

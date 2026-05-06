@@ -7,6 +7,7 @@ Public API:
     plan_query(question, history=None) -> QueryPlan
 """
 import json
+import re
 
 from openai import OpenAI
 from pydantic import ValidationError
@@ -95,12 +96,14 @@ def _call_llm(messages: list[dict]) -> str:
     return response.choices[0].message.content.strip()
 
 
+_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+
 def _parse(raw: str) -> QueryPlan:
     # Strip markdown code fences if the model wraps the JSON despite instructions.
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
+    match = _FENCE_RE.search(raw)
+    if match:
+        raw = match.group(1)
     return QueryPlan.model_validate(json.loads(raw.strip()))
 
 

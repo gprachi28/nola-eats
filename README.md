@@ -8,6 +8,22 @@ A conversational restaurant assistant for New Orleans. Ask natural language ques
 
 ---
 
+## Contents
+
+- [Demo](#demo-ui-designed-with-claude)
+- [How It Works](#️-how-it-works)
+- [Dataset](#-dataset)
+- [Performance](#-performance)
+- [SQL Filter Fields](#️-sql-filter-fields)
+- [Security](#️-security)
+- [Output Guardrails](#-output-guardrails)
+- [Stack](#-stack)
+- [Setup](#-setup)
+- [Running](#️-running)
+- [What's Next](#️-whats-next)
+
+---
+
 ## Demo [UI designed with Claude]
 
 https://github.com/user-attachments/assets/1adddbe5-e89d-4fac-9d1d-1296b5124cd1
@@ -77,6 +93,8 @@ User question
 
 **Why New Orleans?** Its semantically rich review vocabulary — Creole, Cajun, po'boys, beignets, jazz brunch, second lines, Frenchmen Street — gives semantic retrieval real signal to work with. A query like *"late-night Cajun spot after a jazz show"* surfaces meaningfully different results than *"casual dinner."* City was selected after inspecting the actual dataset: Las Vegas is absent from this Yelp release.
 
+See [docs/yelp_example.md](docs/yelp_example.md) for an annotated example of the raw `business.json` and `review.json` record formats, including the attribute encoding quirks the ingest pipeline handles.
+
 ---
 
 ## ⚡ Performance
@@ -93,7 +111,7 @@ All results on Apple M4 Pro, `mlx-community/Qwen2.5-7B-Instruct-4bit` via `mlx_l
 | Synthesizer | ~2,200 ms |
 | **End-to-end** | **~4,100 ms** |
 
-**Warm p50: ~4.1s** — 3.6× under the <15s target. Achieved across 20 experiments: key wins were switching to a 4-bit quantized model (2.6× speedup), eliminating a redundant per-request ChromaDB scan, and a dummy-query warmup at startup to pre-load the HNSW index into RAM.
+**Warm p50: ~4.1s** — 3.6× under the <15s target. Achieved across 20 experiments: key wins were switching to a 4-bit quantized model (2.6× speedup), eliminating a redundant per-request ChromaDB scan, and a dummy-query warmup at startup to pre-load the HNSW index into RAM. Full experiment log: [experiments.md](docs/experiments.md).
 
 ![Latency optimisation across 15 experiments](benchmarks/latency_benchmarks.png)
 
@@ -159,6 +177,26 @@ The Query Planner is an LLM — its output is treated as **untrusted** at the SQ
 
 ---
 
+## 🔒 Output Guardrails
+
+LLM outputs are constrained at two stages of the pipeline.
+
+**Query Planner**
+- Pydantic schema validation on every LLM response — malformed or missing fields are rejected outright.
+- Automatic retry with an explicit schema reminder on the first failure; a `ValueError` is raised if the second attempt also fails, preventing a bad plan from reaching the retrieval layer.
+- Prompt-level anti-inference rules — occasion words (`"bachelor party"`, `"date night"`) are explicitly prohibited from triggering spurious SQL filters. Verified at 20/20 on the query eval set.
+
+**Synthesizer**
+- *Grounding* — the system prompt instructs the model to answer using only the retrieved review evidence and never invent details not present in the snippets.
+- *Negative evidence handling* — if a review warns against a place for the user's use case, the model is instructed not to recommend it and may cite the reason.
+- *Honesty on ambiguity* — mixed or ambiguous reviews must be reflected honestly rather than presented as positive recommendations.
+- `temperature=0.0` — deterministic output; no creative drift.
+- `max_tokens=300` — hard cap prevents generation runaway and keeps synthesizer latency within a predictable window.
+
+**Measured effectiveness** — RAGAS faithfulness eval (Gemini 2.5 Pro judge, 14 queries): **0.831 mean faithfulness**. The score measures the fraction of answer claims that are grounded in the retrieved review evidence. See [docs/experiments.md](docs/experiments.md) (EXP-018 – EXP-020) for the full methodology and how a structural metric bias was identified and corrected.
+
+---
+
 ## 🧱 Stack
 
 | Layer | Tool | Detail |
@@ -190,8 +228,8 @@ cp .env.example .env          # override LLM_BASE_URL if using a non-default por
 **1. Ingest** (one-time, ~30–45 min on M4 Pro):
 ```bash
 python -m ingestion.ingest_nola \
-  --business-file /path/to/yelp_academic_dataset_business.json \
-  --review-file /path/to/yelp_academic_dataset_review.json
+  --business /path/to/yelp_academic_dataset_business.json \
+  --review /path/to/yelp_academic_dataset_review.json
 ```
 
 **2. Start LLM server (mlx_lm, Apple Silicon):**

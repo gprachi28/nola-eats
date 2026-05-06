@@ -13,7 +13,6 @@ Usage:
 import argparse
 import ast
 import json
-import pickle
 import re
 import sqlite3
 from pathlib import Path
@@ -75,7 +74,9 @@ def _parse_str(val: str | None) -> str | None:
 
 
 def _parse_dict(val: str | None) -> str | None:
-    """Python-repr dict string → JSON string, or None on failure."""
+    """Python-repr dict string → JSON string, or None on failure.
+    "{'live': True, ...}" becomes the JSON string {"live": true, ...}"""
+
     if val is None:
         return None
     try:
@@ -286,12 +287,12 @@ def _flush_batch(batch: dict, collection, model: EmbeddingModel) -> None:
 
 def load_checkpoint() -> int:
     if CHECKPOINT_FILE.exists():
-        return pickle.loads(CHECKPOINT_FILE.read_bytes())
+        return json.loads(CHECKPOINT_FILE.read_text())
     return 0
 
 
 def save_checkpoint(idx: int) -> None:
-    CHECKPOINT_FILE.write_bytes(pickle.dumps(idx))
+    CHECKPOINT_FILE.write_text(json.dumps(idx))
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

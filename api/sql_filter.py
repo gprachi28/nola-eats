@@ -90,11 +90,10 @@ def _build_conditions(sql_filters: dict) -> list[_Condition]:
 def _execute(conditions: list[_Condition], db_path: str) -> list[str]:
     where = " AND ".join(c.sql for c in conditions)
     params = [p for c in conditions for p in c.params]
-    conn = sqlite3.connect(db_path)
-    rows = conn.execute(
-        f"SELECT business_id FROM businesses WHERE {where}", params
-    ).fetchall()
-    conn.close()
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            f"SELECT business_id FROM businesses WHERE {where}", params
+        ).fetchall()
     return [r[0] for r in rows]
 
 
