@@ -79,6 +79,8 @@ User question
 
 > The SQL filter achieves deterministic precision before the semantic search runs. Vector search never crosses business boundaries — it operates only within the SQL-filtered candidate pool. This is the industry-standard *filtered vector search* pattern.
 
+**Retrieval ranking:** Snippets are ranked by L2 distance (Euclidean) on 256-dim embeddings — ChromaDB's default; smallest distance = closest semantic match. The embedding model is `nomic-embed-text-v1.5` with MRL truncation to 256 dimensions, run locally via `mlx_embedding_models` (MPS). Asymmetric retrieval prefixes are applied: documents are embedded as `"search_document: " + text` at ingest time; queries are embedded as `"search_query: " + text` at runtime. This prefix pairing is required by the model for correct asymmetric retrieval — omitting it degrades quality. There is no re-ranking step on top of the bi-encoder retrieval.
+
 ---
 
 ## 📊 Dataset
@@ -273,7 +275,9 @@ PYTHONPATH=. .venv/bin/python benchmarks/ragas_eval.py --judge-only
 
 ## 🗺️ What's Next
 
-Multi-turn session support — last 3 conversation turns injected into the Query Planner so it can resolve references like *"the first one"*, *"anything cheaper?"*, *"what about parking there?"*. In-memory session store, 30-min TTL.
+Multi-turn session support (v2) — last 3 conversation turns injected into the Query Planner so it can resolve references like *"the first one"*, *"anything cheaper?"*, *"what about parking there?"*. In-memory session store, 30-min TTL.
+
+Cross-encoder re-ranking — a second-stage ranker (e.g. `BAAI/bge-reranker-base`) that scores each `(query, snippet)` pair jointly before passing evidence to the Synthesizer. Bi-encoders (like the current nomic retrieval) are fast but approximate — they embed query and document independently. A cross-encoder attends across both texts together, producing more accurate relevance scores at the cost of ~100–300ms extra latency for 20 snippets on MPS.
 
 ---
 
