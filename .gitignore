@@ -17,3 +17,4 @@ ingestion/checkpoint_sql.pkl
 ingestion/checkpoint_nola.pkl
 *.db
 .DS_Store
+.vscode/
