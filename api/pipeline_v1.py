@@ -13,6 +13,7 @@ import time
 from collections.abc import Iterator
 
 from api.query_planner import plan_query
+from api.reranker import rerank
 from api.retriever import retrieve
 from api.schemas import QueryResponse
 from api.sql_filter import filter_businesses
@@ -38,6 +39,7 @@ def run(question: str) -> QueryResponse:
     candidate_ids = filter_businesses(query_plan.sql_filters)
 
     snippets = retrieve(query_plan.semantic_query, candidate_ids)
+    snippets = rerank(query_plan.semantic_query, snippets)
 
     biz_ids = list({s["business_id"] for s in snippets})
     business_meta = _fetch_business_meta(biz_ids)
@@ -74,6 +76,7 @@ def stream(question: str) -> Iterator[str]:
 
         candidate_ids = filter_businesses(query_plan.sql_filters)
         snippets = retrieve(query_plan.semantic_query, candidate_ids)
+        snippets = rerank(query_plan.semantic_query, snippets)
         biz_ids = list({s["business_id"] for s in snippets})
         business_meta = _fetch_business_meta(biz_ids)
 
