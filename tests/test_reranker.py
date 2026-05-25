@@ -69,6 +69,30 @@ def test_rerank_passthrough_on_empty_snippets():
     assert result == []
 
 
+def test_rerank_groups_by_business_for_diversity():
+    # biz_a has 2 snippets scored 0.9 and 0.7 (best business, max=0.9)
+    # biz_b has 1 snippet scored 0.8 (second business, max=0.8)
+    # biz_a should rank first despite biz_b having a higher score than biz_a's second snippet
+    snippets = [
+        {"business_id": "biz_a", "text": "snippet a1", "stars": 4.5},
+        {"business_id": "biz_b", "text": "snippet b1", "stars": 4.0},
+        {"business_id": "biz_a", "text": "snippet a2", "stars": 4.5},
+    ]
+    mock_ce = _mock_model([0.9, 0.8, 0.7])
+
+    with patch("api.reranker._get_model", return_value=mock_ce), \
+         patch("api.reranker.settings") as mock_cfg:
+        mock_cfg.rerank_enabled = True
+        result = rerank("jazz brunch spot", snippets)
+
+    assert result[0]["business_id"] == "biz_a"
+    assert result[0]["rerank_score"] == pytest.approx(0.9)
+    assert result[1]["business_id"] == "biz_a"
+    assert result[1]["rerank_score"] == pytest.approx(0.7)
+    assert result[2]["business_id"] == "biz_b"
+    assert result[2]["rerank_score"] == pytest.approx(0.8)
+
+
 def test_rerank_passes_correct_pairs_to_model():
     snippets = _snippets()
     mock_ce = _mock_model([0.5, 0.7, 0.6])
