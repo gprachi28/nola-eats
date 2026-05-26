@@ -112,10 +112,11 @@ All results on Apple M4 Pro, `mlx-community/Qwen2.5-7B-Instruct-4bit` via `mlx_l
 | Query Planner | ~880 ms |
 | SQL filter | ~3 ms |
 | Retrieval | ~900 ms |
+| Re-ranking | ~380 ms |
 | Synthesizer | ~2,200 ms |
-| **End-to-end** | **~4,100 ms** |
+| **End-to-end** | **~4,500 ms** |
 
-**Warm p50: ~4.1s** — 3.6× under the <15s target. Achieved across 20 experiments: key wins were switching to a 4-bit quantized model (2.6× speedup), eliminating a redundant per-request ChromaDB scan, and a dummy-query warmup at startup to pre-load the HNSW index into RAM. Full experiment log: [experiments.md](docs/experiments.md).
+**Warm p50: ~4.5s** — 3.3× under the <15s target. Achieved across 22 experiments: key wins were switching to a 4-bit quantized model (2.6× speedup), eliminating a redundant per-request ChromaDB scan, a dummy-query warmup at startup to pre-load the HNSW index into RAM, and adding a cross-encoder re-ranking stage with business-aware diversity. Full experiment log: [experiments.md](docs/experiments.md).
 
 ![Latency optimisation across 15 experiments](benchmarks/latency_benchmarks.png)
 
@@ -153,7 +154,7 @@ During evaluation, a false negative bias was identified: RAGAS marked business n
 | Error rate | **0%** |
 | Throughput | 0.18 req/s |
 
-Tested with two `mlx_lm.server` instances behind a round-robin proxy. Latency under concurrent load is queue-induced (serial LLM inference), not pipeline latency — single-user warm p50 remains 4.1s.
+Tested with two `mlx_lm.server` instances behind a round-robin proxy. Latency under concurrent load is queue-induced (serial LLM inference), not pipeline latency — single-user warm p50 remains ~4.5s.
 
 ---
 
@@ -210,6 +211,7 @@ LLM outputs are constrained at two stages of the pipeline.
 | Vector store | ChromaDB | 621K review embeddings, persistent local HNSW |
 | Embeddings | nomic-embed-text-v1.5 | 256-dim MRL truncation, via mlx-embedding-models (MPS) |
 | LLM | Qwen2.5-7B-Instruct-4bit | Query Planner + Synthesizer, single model via mlx_lm.server (MPS) |
+| Re-ranker | BAAI/bge-reranker-base | Cross-encoder, business-aware diversity, via sentence-transformers (CPU) |
 | HTTP client | openai SDK | Pointed at mlx_lm.server's OpenAI-compatible `/v1` endpoint |
 | Config | pydantic-settings | `.env`-based |
 
@@ -278,8 +280,6 @@ PYTHONPATH=. .venv/bin/python benchmarks/ragas_eval.py --judge-only
 ## 🗺️ What's Next
 
 Multi-turn session support (v2) — last 3 conversation turns injected into the Query Planner so it can resolve references like *"the first one"*, *"anything cheaper?"*, *"what about parking there?"*. In-memory session store, 30-min TTL.
-
-Cross-encoder re-ranking — a second-stage ranker (e.g. `BAAI/bge-reranker-base`) that scores each `(query, snippet)` pair jointly before passing evidence to the Synthesizer. Bi-encoders (like the current nomic retrieval) are fast but approximate — they embed query and document independently. A cross-encoder attends across both texts together, producing more accurate relevance scores at the cost of ~100–300ms extra latency for 20 snippets on MPS.
 
 ---
 
