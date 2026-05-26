@@ -139,11 +139,11 @@ RAGAS faithfulness eval — 14 `find_businesses` queries, judged by Gemini 2.5 P
 
 | | Score |
 |---|---:|
-| **Mean faithfulness** | **0.831** |
-| Queries scoring ≥ 0.80 | 10 / 14 |
-| Perfect scores (1.00) | 3 / 14 |
+| **Mean faithfulness** | **0.888** |
+| Queries scoring ≥ 0.80 | 11 / 14 |
+| Perfect scores (1.00) | 4 / 14 |
 
-During evaluation, a false negative bias was identified: RAGAS marked business names and SQL-only attributes (e.g. `dogs_allowed`, `byob`) as ungrounded because they never appear in anonymous review text. Fixed by (1) injecting serialised business metadata into the eval context and (2) prefixing each snippet with its business name — giving the judge visibility into both data sources the synthesizer uses. Raw baseline was 0.501; corrected score is 0.831.
+During evaluation, a false negative bias was identified: RAGAS marked business names and SQL-only attributes (e.g. `dogs_allowed`, `byob`) as ungrounded because they never appear in anonymous review text. Fixed by (1) injecting serialised business metadata into the eval context and (2) prefixing each snippet with its business name — giving the judge visibility into both data sources the synthesizer uses. Raw baseline was 0.501; score after structural fix was 0.831 (EXP-020, no reranking); current score 0.888 reflects post-reranking pipeline (EXP-023).
 
 ### Load Test — 5 concurrent users, 300s
 
@@ -198,7 +198,7 @@ LLM outputs are constrained at two stages of the pipeline.
 - `temperature=0.0` — deterministic output; no creative drift.
 - `max_tokens=300` — hard cap prevents generation runaway and keeps synthesizer latency within a predictable window.
 
-**Measured effectiveness** — RAGAS faithfulness eval (Gemini 2.5 Pro judge, 14 queries): **0.831 mean faithfulness**. The score measures the fraction of answer claims that are grounded in the retrieved review evidence. See [docs/experiments.md](docs/experiments.md) (EXP-018 – EXP-020) for the full methodology and how a structural metric bias was identified and corrected.
+**Measured effectiveness** — RAGAS faithfulness eval (Gemini 2.5 Pro judge, 14 queries): **0.888 mean faithfulness**. The score measures the fraction of answer claims that are grounded in the retrieved review evidence. See [docs/experiments.md](docs/experiments.md) (EXP-018 – EXP-020) for the full methodology and how a structural metric bias was identified and corrected; EXP-023 for the post-reranking re-eval.
 
 ---
 
