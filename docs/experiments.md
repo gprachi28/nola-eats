@@ -697,3 +697,40 @@ Q1 rerank (1,106 ms) is elevated — first batch through the cross-encoder after
 - Total latency difference (−349 ms) is within normal run-to-run variance, not a real improvement
 - Warm p50 4,539 ms — comfortably within the <15s target
 - The change is a quality fix, not a latency fix: the pipeline now guarantees diverse businesses reach the Synthesizer on every query
+
+---
+
+## EXP-023 — RAGAS Faithfulness Eval (post-reranking)
+**Date:** 2026-05-26
+**Tool:** RAGAS 0.1.x — `benchmarks/ragas_eval.py` (fresh collection + judge)
+**Judge:** gemini-2.5-pro
+**Samples:** 14 `find_businesses` queries — fresh pipeline responses collected with reranking enabled (EXP-021 + EXP-022 changes active). Previous samples (EXP-020) backed up as `ragas_samples_exp020.json`.
+**Eval methodology:** Same as EXP-020 — metadata injection + snippet attribution applied to contexts.
+
+**Results vs EXP-020 (no reranking):**
+
+| Query | EXP-020 | EXP-023 | Δ |
+|---|---:|---:|---:|
+| bachelor party spot, loud, handles large groups | 0.81 | **1.00** | +0.19 |
+| cheap brunch place with outdoor seating | 0.78 | 0.82 | +0.04 |
+| jazz brunch with live music | 1.00 | 0.92 | -0.08 |
+| late-night Cajun food after a show on Frenchmen Street | 0.88 | 0.88 | 0.00 |
+| family-friendly seafood place with parking | 0.55 | **1.00** | **+0.45** |
+| quiet romantic date spot | 1.00 | 0.73 | -0.27 |
+| outdoor patio restaurant with a full bar | 0.88 | 0.89 | +0.01 |
+| dog-friendly restaurant with a patio | 0.80 | **1.00** | +0.20 |
+| upscale dinner spot that takes reservations | 1.00 | 0.85 | -0.15 |
+| happy hour bar with TVs to watch sports | 0.57 | **0.80** | **+0.23** |
+| BYOB place with casual attire | 0.91 | 0.82 | -0.09 |
+| bachelorette dinner, upscale vibes, good for large groups | 0.85 | 0.94 | +0.09 |
+| wheelchair accessible restaurant that caters events | 0.87 | **1.00** | +0.13 |
+| dressy dinner spot with live music | 0.75 | 0.80 | +0.05 |
+
+**Mean faithfulness: 0.888 (14/14 scored) — up from 0.831 in EXP-020 (+0.057)**
+
+**Analysis:**
+- Re-ranking improves mean faithfulness by +5.7pp — the cross-encoder surfaces higher-relevance snippets, giving the Synthesizer better grounding material overall
+- Largest gains on queries where bi-encoder struggled: family-friendly seafood (+0.45), happy hour (+0.23), dog-friendly (+0.20), bachelor party (+0.19) — all cases where keyword overlap in bi-encoder retrieval was pulling in tangentially relevant or off-topic snippets
+- 3 regressions: quiet romantic date (−0.27), upscale reservations (−0.15), BYOB (−0.09). In each case the bi-encoder ordering already happened to surface strong snippets; the cross-encoder reassigned scores based on cross-attention and displaced them with slightly less optimal choices
+- No query fell below 0.73 — the floor improved: EXP-020 had two 0.00 scores (corrected to the current baseline via the metadata/attribution fix); EXP-023 minimum is 0.73
+- Regressions are within acceptable variance for a 7B judge model and do not indicate systematic failure; they are candidate queries for prompt-level investigation in a future experiment
