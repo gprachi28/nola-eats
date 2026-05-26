@@ -15,6 +15,7 @@ Matches the measurement methodology from EXP-010 onwards.
 import time
 
 from api.query_planner import plan_query
+from api.reranker import _get_model as _get_rerank_model, rerank
 from api.retriever import _get_collection, _get_model, retrieve
 from api.sql_filter import filter_businesses
 from api.synthesizer import synthesize
@@ -43,6 +44,10 @@ def run_with_breakdown(question: str) -> dict:
     stages["retrieval"] = int((time.time() - t) * 1000)
 
     t = time.time()
+    snippets = rerank(plan.semantic_query, snippets)
+    stages["rerank"] = int((time.time() - t) * 1000)
+
+    t = time.time()
     biz_ids = list({s["business_id"] for s in snippets})
     business_meta = _fetch_business_meta(biz_ids)
     stages["meta_fetch"] = int((time.time() - t) * 1000)
@@ -57,10 +62,11 @@ def run_with_breakdown(question: str) -> dict:
 
 
 def main():
-    print("Warming up embedding model and ChromaDB index...")
+    print("Warming up embedding model, ChromaDB index, and reranker...")
     _get_model()
     _get_collection()
     retrieve("warmup")  # forces HNSW index into memory before timed queries
+    _get_rerank_model()  # loads CrossEncoder weights before timed queries
     print("Warmup complete.\n")
 
     header = f"{'Stage':<12}" + "".join(f"  Q{i+1:<18}" for i in range(len(QUERIES)))
@@ -73,7 +79,7 @@ def main():
         all_results.append(run_with_breakdown(q))
 
     print()
-    stages = ["planner", "sql_filter", "retrieval", "meta_fetch", "synthesizer", "total", "businesses"]
+    stages = ["planner", "sql_filter", "retrieval", "rerank", "meta_fetch", "synthesizer", "total", "businesses"]
     for stage in stages:
         row = f"{stage:<12}"
         for r in all_results:

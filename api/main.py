@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from api.pipeline_v1 import run, stream
+from api.reranker import _get_model as _get_rerank_model
 from api.retriever import _get_collection, _get_model, retrieve
 from api.schemas import QueryRequest, QueryResponse
 
@@ -31,6 +32,7 @@ def warmup() -> None:
     _get_model()
     _get_collection()
     retrieve("warmup")  # forces HNSW index into memory
+    _get_rerank_model()  # loads CrossEncoder weights before first request
 
 
 @app.get("/")

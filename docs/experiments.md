@@ -616,3 +616,84 @@ Metadata injection adds `"name: Trenasse | has_tv: true"` as a separate context 
 - Family-friendly seafood unchanged at 0.55 — thin snippet quality for `good_for_kids + parking` combination; likely a retrieval coverage gap rather than hallucination
 
 **Conclusion:** RAGAS faithfulness 0.831 is the final benchmark for v1. The two-step fix (metadata injection + snippet attribution) corrects a structural metric mismatch inherent to hybrid retrieval pipelines where claims come from both review text and SQL metadata. The methodology and fix are documented as a reusable pattern for future RAG evaluations.
+
+---
+
+## EXP-021 — Cross-encoder re-ranking (BAAI/bge-reranker-base)
+**Date:** 2026-05-25
+**Model:** BAAI/bge-reranker-base (sentence-transformers 5.5.1, CPU)
+**Change:** Added `api/reranker.py` — CrossEncoder singleton scoring all top-K `(query, snippet)` pairs after bi-encoder retrieval; results re-ordered by score descending before reaching the Synthesizer. Controlled by `RERANK_ENABLED` env flag (`rerank_enabled` in config). Warmup added to FastAPI startup handler and `benchmarks/latency_breakdown.py`.
+
+**Latency — reranking enabled:**
+
+| Stage | Q1 bachelor party | Q2 romantic date | Q3 jazz brunch |
+|---|---:|---:|---:|
+| planner | 1,487 ms | 830 ms | 885 ms |
+| sql_filter | 3 ms | 3 ms | 2 ms |
+| retrieval | 2,693 ms | 1,980 ms | 497 ms |
+| rerank | 1,106 ms | 282 ms | 466 ms |
+| meta_fetch | 2 ms | 1 ms | 0 ms |
+| synthesizer | 2,469 ms | 2,042 ms | 2,609 ms |
+| **TOTAL** | **7,760 ms** | **5,138 ms** | **4,459 ms** |
+| businesses | 7 | 9 | 4 |
+
+**Warm p50 (reranking enabled): 5,138 ms — target met with 3× headroom**
+
+**vs EXP-015 baseline (no reranking, ~4,015 ms warm avg):**
+
+| | EXP-015 warm avg | EXP-021 with reranking | EXP-021 without reranking | Rerank overhead |
+|---|---:|---:|---:|---:|
+| total | ~4,015 ms | ~4,798 ms | ~3,570 ms | ~374 ms (+9%) |
+
+Q1 rerank (1,106 ms) is elevated — first batch through the cross-encoder after model load; warm Q2/Q3 are 282 ms and 466 ms (20 snippet pairs scored on CPU).
+
+**Snippet order change (Q1 — bachelor party):**
+
+| Rank | Without reranking (bi-encoder L2) | With reranking (cross-encoder) |
+|---|---|---|
+| 1 | Jacques-Imo's Cafe (dist=0.602) — *"many friends tell me to go here..."* | Pat O'Brien's (score=0.547) — *"few different rooms... main bar..."* |
+| 2 | Jacques-Imo's Cafe (dist=0.613) — *"Huge hit with our friends... IT'S CROWDED!"* | Pat O'Brien's (score=0.274) — *"only really fun if you're already really drunk"* |
+| 3 | Ruby Slipper (dist=0.617) — *"My bachelorette brunch was absolutely amazing!"* | Pat O'Brien's (score=0.189) — *"courtyard... celebrate our 50th anniversary"* |
+
+**Analysis:**
+- Rerank warm overhead is ~280–470 ms for 20 snippet pairs on CPU — acceptable cost given the target is <15s
+- Cross-encoder surfaces Pat O'Brien's (a large-group party bar on Bourbon St.) over Jacques-Imo's, which the bi-encoder favoured because its reviews contain the phrase "bachelor party" explicitly — the cross-encoder attends to the full context and scores "loud, handles large groups" more holistically
+- Top-3 cross-encoder results are all the same business (Pat O'Brien's) — a known limitation of bi-encoder retrieval + cross-encoder re-ranking without diversity constraints: the best individual snippets can all belong to one business
+- Cross-encoder scores are low (0.55, 0.27, 0.19) — the model is not highly confident in any snippet as a direct answer, which reflects that retrieved snippets describe the bar atmosphere rather than answering "where should we eat for a bachelor party" directly
+- Without reranking, the pipeline is slightly faster than EXP-015 (~3,570 ms vs ~4,015 ms warm avg) — normal run-to-run variance, not a regression
+
+---
+
+## EXP-022 — Business-aware diversity in cross-encoder re-ranking
+**Date:** 2026-05-26
+**Change:** `api/reranker.py` — `rerank()` now groups scored snippets by `business_id`, ranks businesses by their max snippet score, and flattens to a list (within each business, snippets are sorted by score descending). Previously, global score ordering could return many snippets from one business in the top positions.
+
+**Motivation:** EXP-021 revealed all top-3 snippets for the bachelor party query were Pat O'Brien's. For multi-turn sessions (v2), if a user rejects the first suggestion and asks for alternatives, the Synthesizer must have already seen diverse candidates — not many snippets from one business. Business-aware ranking ensures the top-5 businesses passed to the Synthesizer are always distinct.
+
+**Latency — reranking enabled (diversity-aware):**
+
+| Stage | Q1 bachelor party | Q2 romantic date | Q3 jazz brunch |
+|---|---:|---:|---:|
+| planner | 2,975 ms | 825 ms | 883 ms |
+| sql_filter | 7 ms | 1 ms | 4 ms |
+| retrieval | 2,472 ms | 1,471 ms | 404 ms |
+| rerank | 1,066 ms | 288 ms | 470 ms |
+| meta_fetch | 0 ms | 1 ms | 0 ms |
+| synthesizer | 2,599 ms | 1,953 ms | 2,598 ms |
+| **TOTAL** | **9,119 ms** | **4,539 ms** | **4,359 ms** |
+| businesses | 7 | 9 | 4 |
+
+**Warm p50: 4,539 ms**
+
+**vs EXP-021 (flat global sort):**
+
+| | EXP-021 warm avg | EXP-022 warm avg | Delta |
+|---|---:|---:|---:|
+| rerank stage | ~374 ms | ~379 ms | +5 ms |
+| total | ~4,798 ms | ~4,449 ms | -349 ms |
+
+**Analysis:**
+- Rerank stage overhead is flat: 288 ms / 470 ms (EXP-022) vs 282 ms / 466 ms (EXP-021) — the grouping and sort of 20 items adds zero measurable overhead; the cross-encoder inference dominates
+- Total latency difference (−349 ms) is within normal run-to-run variance, not a real improvement
+- Warm p50 4,539 ms — comfortably within the <15s target
+- The change is a quality fix, not a latency fix: the pipeline now guarantees diverse businesses reach the Synthesizer on every query

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     sqlite_path: str = str(_ROOT / "yelp_reviews.db")
     session_ttl: int = 1800  # 30 minutes in seconds
     gemini_api_key: str = ""
+    rerank_model: str = "BAAI/bge-reranker-base"
+    rerank_enabled: bool = True
 
 
 settings = Settings()
