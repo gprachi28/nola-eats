@@ -661,3 +661,39 @@ Q1 rerank (1,106 ms) is elevated — first batch through the cross-encoder after
 - Top-3 cross-encoder results are all the same business (Pat O'Brien's) — a known limitation of bi-encoder retrieval + cross-encoder re-ranking without diversity constraints: the best individual snippets can all belong to one business
 - Cross-encoder scores are low (0.55, 0.27, 0.19) — the model is not highly confident in any snippet as a direct answer, which reflects that retrieved snippets describe the bar atmosphere rather than answering "where should we eat for a bachelor party" directly
 - Without reranking, the pipeline is slightly faster than EXP-015 (~3,570 ms vs ~4,015 ms warm avg) — normal run-to-run variance, not a regression
+
+---
+
+## EXP-022 — Business-aware diversity in cross-encoder re-ranking
+**Date:** 2026-05-26
+**Change:** `api/reranker.py` — `rerank()` now groups scored snippets by `business_id`, ranks businesses by their max snippet score, and flattens to a list (within each business, snippets are sorted by score descending). Previously, global score ordering could return many snippets from one business in the top positions.
+
+**Motivation:** EXP-021 revealed all top-3 snippets for the bachelor party query were Pat O'Brien's. For multi-turn sessions (v2), if a user rejects the first suggestion and asks for alternatives, the Synthesizer must have already seen diverse candidates — not many snippets from one business. Business-aware ranking ensures the top-5 businesses passed to the Synthesizer are always distinct.
+
+**Latency — reranking enabled (diversity-aware):**
+
+| Stage | Q1 bachelor party | Q2 romantic date | Q3 jazz brunch |
+|---|---:|---:|---:|
+| planner | 2,975 ms | 825 ms | 883 ms |
+| sql_filter | 7 ms | 1 ms | 4 ms |
+| retrieval | 2,472 ms | 1,471 ms | 404 ms |
+| rerank | 1,066 ms | 288 ms | 470 ms |
+| meta_fetch | 0 ms | 1 ms | 0 ms |
+| synthesizer | 2,599 ms | 1,953 ms | 2,598 ms |
+| **TOTAL** | **9,119 ms** | **4,539 ms** | **4,359 ms** |
+| businesses | 7 | 9 | 4 |
+
+**Warm p50: 4,539 ms**
+
+**vs EXP-021 (flat global sort):**
+
+| | EXP-021 warm avg | EXP-022 warm avg | Delta |
+|---|---:|---:|---:|
+| rerank stage | ~374 ms | ~379 ms | +5 ms |
+| total | ~4,798 ms | ~4,449 ms | -349 ms |
+
+**Analysis:**
+- Rerank stage overhead is flat: 288 ms / 470 ms (EXP-022) vs 282 ms / 466 ms (EXP-021) — the grouping and sort of 20 items adds zero measurable overhead; the cross-encoder inference dominates
+- Total latency difference (−349 ms) is within normal run-to-run variance, not a real improvement
+- Warm p50 4,539 ms — comfortably within the <15s target
+- The change is a quality fix, not a latency fix: the pipeline now guarantees diverse businesses reach the Synthesizer on every query
